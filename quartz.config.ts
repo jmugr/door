@@ -16,7 +16,7 @@ const config: QuartzConfig = {
       provider: "plausible",
     },
     locale: "en-US",
-    baseUrl: "quartz.jzhao.xyz",
+    baseUrl: "https://jrenn3.github.io/quartz/",
     ignorePatterns: [
       "private", 
       "templates", 
