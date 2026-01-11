@@ -5,6 +5,8 @@ on:
     branches:
       - v4
   workflow_dispatch:
+  repository_dispatch:
+    types: [vault-updated]
  
 permissions:
   contents: read
