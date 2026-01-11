@@ -1,0 +1,3 @@
+[submodule "vault"]
+	path = vault
+	url = https://github.com/jrenn3/vault.git
