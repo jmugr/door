@@ -27,7 +27,7 @@ jobs:
       - name: Checkout Vault Repository
         uses: actions/checkout@v4
         with:
-          repository: jrenn3/vault
+          repository: jmugr/vault
           token: ${{ secrets.GH_TOKEN }}
           path: vault
       - uses: actions/setup-node@v4
