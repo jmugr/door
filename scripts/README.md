@@ -17,8 +17,12 @@ python create-changelog_v2.py --local-only
 ### Requirements
 
 ```bash
-pip install gitpython python-frontmatter
+pip install gitpython python-frontmatter tzdata
 ```
+
+### Timezone
+
+The changelog uses **America/Chicago (Central Time)** for all timestamps and date groupings.
 
 ### What it does
 

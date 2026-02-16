@@ -1,5 +1,6 @@
 from git import Repo
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import frontmatter
 from pathlib import Path
 from collections import defaultdict
@@ -44,7 +45,7 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
         if commit_count % 100 == 0:
             print(f"Processed {commit_count} commits...")
         
-        commit_date = datetime.fromtimestamp(commit.committed_date).date()
+        commit_date = datetime.fromtimestamp(commit.committed_date, tz=ZoneInfo("America/Chicago")).date()
         
         try:
             if commit.parents:
@@ -165,7 +166,8 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
         f.write("---\n")
         f.write("publish: true\n")
         f.write("---\n")
-        f.write(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n")
+        chicago_time = datetime.now(ZoneInfo("America/Chicago"))
+        f.write(f"*Last updated: {chicago_time.strftime('%Y-%m-%d %H:%M:%S %Z')}*\n")
         
         for date_str in all_dates:
             f.write(f"## {date_str}\n")
