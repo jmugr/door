@@ -38,7 +38,23 @@ export const defaultContentPageLayout: PageLayout = {
         { Component: Component.ReaderMode() },
       ],
     }),
-    Component.Explorer(),
+    Component.Explorer({
+      sortFn: (a, b) => {
+        // Keep folders at the top
+        if (a.isFolder && !b.isFolder) return -1
+        if (!a.isFolder && b.isFolder) return 1
+        
+        // Sort files by date descending (newest first)
+        if (!a.isFolder && !b.isFolder) {
+          const aDate = a.data?.date?.getTime() ?? 0
+          const bDate = b.data?.date?.getTime() ?? 0
+          return bDate - aDate
+        }
+        
+        // Sort folders alphabetically
+        return a.displayName.localeCompare(b.displayName)
+      },
+    }),
   ],
   right: [
     Component.Graph(),
@@ -62,7 +78,23 @@ export const defaultListPageLayout: PageLayout = {
         { Component: Component.Darkmode() },
       ],
     }),
-    Component.Explorer(),
+    Component.Explorer({
+      sortFn: (a, b) => {
+        // Keep folders at the top
+        if (a.isFolder && !b.isFolder) return -1
+        if (!a.isFolder && b.isFolder) return 1
+        
+        // Sort files by date descending (newest first)
+        if (!a.isFolder && !b.isFolder) {
+          const aDate = a.data?.date?.getTime() ?? 0
+          const bDate = b.data?.date?.getTime() ?? 0
+          return bDate - aDate
+        }
+        
+        // Sort folders alphabetically
+        return a.displayName.localeCompare(b.displayName)
+      },
+    }),
   ],
   right: [],
 }
