@@ -39,7 +39,7 @@ export const defaultContentPageLayout: PageLayout = {
       ],
     }),
     Component.Explorer({
-      title: "Most recently modified",
+      title: "Contents",
       sortFn: (a, b) => {
         // Keep folders at the top
         if (a.isFolder && !b.isFolder) return -1
@@ -80,7 +80,7 @@ export const defaultListPageLayout: PageLayout = {
       ],
     }),
     Component.Explorer({
-      title: "Most recently modified",
+      title: "Contents",
       sortFn: (a, b) => {
         // Keep folders at the top
         if (a.isFolder && !b.isFolder) return -1
