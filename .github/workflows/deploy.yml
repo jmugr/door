@@ -37,10 +37,10 @@ jobs:
           python-version: '3.11'
       - name: Install Python Dependencies
         run: |
-          pip install gitpython python-frontmatter tzdata
+          pip install -r scripts/requirements.txt
       - name: Generate Changelog
         run: |
-          python scripts/create-changelog.py --vault-path=vault
+          python scripts/create-changelog.py --vault-path=vault --local-only
       - name: Commit and Push Changelog
         working-directory: vault
         run: |

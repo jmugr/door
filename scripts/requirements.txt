@@ -1,0 +1,4 @@
+gitpython
+python-frontmatter
+firebase-admin
+tzdata
