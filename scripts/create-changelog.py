@@ -341,7 +341,7 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                     })
             
             firebase_data[date_str] = {
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now(ZoneInfo("America/Chicago")).isoformat(),
                 'changes': daily_changes,
                 'renames': daily_renames,
                 # Keep files for backward compatibility
@@ -394,7 +394,7 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 # Only add entries with actual changes or renames
                 if daily_changes or daily_renames:
                     pending_data[date_str] = {
-                        'timestamp': datetime.now().isoformat(),
+                        'timestamp': datetime.now(ZoneInfo("America/Chicago")).isoformat(),
                         'changes': daily_changes,
                         'renames': daily_renames,
                         'files': daily_changes
