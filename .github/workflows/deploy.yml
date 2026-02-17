@@ -42,7 +42,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
         run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT_KEY" | base64 --decode > scripts/serviceAccountKey.json
+          echo "$FIREBASE_SERVICE_ACCOUNT_KEY" | base64 --decode > serviceAccountKey.json
       - name: Generate Changelog
         env:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
