@@ -169,6 +169,9 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("---\n")
         f.write("publish: true\n")
+        f.write("tags:\n")
+        f.write("  - topic/garage\n")
+        f.write("  - type/system\n")
         f.write("---\n")
         chicago_time = datetime.now(ZoneInfo("America/Chicago"))
         f.write(f"*Last updated: {chicago_time.strftime('%Y-%m-%d %H:%M:%S %Z')}*\n")
