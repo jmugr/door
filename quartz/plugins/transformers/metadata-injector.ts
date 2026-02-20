@@ -1,5 +1,5 @@
 import { QuartzTransformerPlugin } from "../types"
-import { Root, Paragraph, Text, Strong, Link } from "mdast"
+import { Root, Paragraph, Text, Strong, Link, ThematicBreak } from "mdast"
 import { BuildCtx } from "../../util/ctx"
 
 export interface Options {
@@ -162,11 +162,13 @@ export const MetadataInjector: QuartzTransformerPlugin<Partial<Options>> = (user
               return
             }
 
-            // Insert at the beginning of the tree
+            const separator: ThematicBreak = { type: "thematicBreak" }
+
+            // Insert at the beginning of the tree with a separator
             if (tree.children && tree.children.length > 0) {
-              tree.children.unshift(metadataBlock)
+              tree.children = [metadataBlock, separator, ...tree.children]
             } else {
-              tree.children = [metadataBlock]
+              tree.children = [metadataBlock, separator]
             }
           }
         },
