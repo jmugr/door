@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Explorer Scroll Debug</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    .test-section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+    .instruction { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    code { background: #e0e0e0; padding: 2px 5px; }
+  </style>
+</head>
+<body>
+  <h1>Explorer Scrolling Diagnostic Tests</h1>
+  
+  <div class="test-section">
+    <h2>Test 1: Check CSS Computed Styles</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <ol>
+        <li>Open DevTools (F12)</li>
+        <li>Run this to check .explorer-content overflow:</li>
+        <code>
+          const content = document.querySelector('.explorer-content');
+          console.log('explorer-content overflow:', window.getComputedStyle(content).overflow);
+          console.log('explorer-content overflow-y:', window.getComputedStyle(content).overflowY);
+        </code>
+        <li>Run this to check .explorer-ul overflow:</li>
+        <code>
+          const ul = document.querySelector('.explorer-ul');
+          console.log('explorer-ul overflow:', window.getComputedStyle(ul).overflow);
+          console.log('explorer-ul overflow-y:', window.getComputedStyle(ul).overflowY);
+          console.log('explorer-ul has .overflow class:', ul.classList.contains('overflow'));
+        </code>
+      </ol>
+      <p><strong>Expected Results:</strong></p>
+      <ul>
+        <li>.explorer-content overflow-y should be: <strong>hidden</strong></li>
+        <li>.explorer-ul overflow-y should be: <strong>auto</strong></li>
+        <li>.explorer-ul should have class: <strong>overflow</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 2: Check Element Heights</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const content = document.querySelector('.explorer-content');
+        const ul = document.querySelector('.explorer-ul');
+        console.log('explorer-content:', {
+          clientHeight: content.clientHeight,
+          scrollHeight: content.scrollHeight,
+          offsetHeight: content.offsetHeight
+        });
+        console.log('explorer-ul:', {
+          clientHeight: ul.clientHeight,
+          scrollHeight: ul.scrollHeight,
+          offsetHeight: ul.offsetHeight
+        });
+      </code>
+      <p><strong>Expected:</strong> ul.scrollHeight should be greater than ul.clientHeight if content is scrollable</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 3: Check Pointer Events</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const items = document.querySelectorAll('.explorer-ul li');
+        items.forEach((li, i) => {
+          const style = window.getComputedStyle(li);
+          if (i < 5) console.log(`li ${i} pointer-events:`, style.pointerEvents);
+        });
+      </code>
+      <p><strong>Expected:</strong> Should be 'auto' or not 'none'</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 4: Check Which Element Receives Scroll Events</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const content = document.querySelector('.explorer-content');
+        const ul = document.querySelector('.explorer-ul');
+        
+        content.addEventListener('wheel', (e) => {
+          console.log('WHEEL on explorer-content', e.target.className);
+        });
+        
+        ul.addEventListener('wheel', (e) => {
+          console.log('WHEEL on explorer-ul', e.target.className);
+        });
+        
+        console.log('Wheel listeners added. Now try scrolling over different elements.');
+      </code>
+      <p><strong>Instructions:</strong> After running this, try scrolling over:</p>
+      <ul>
+        <li>A file link</li>
+        <li>A folder title</li>
+        <li>Empty space in the explorer</li>
+        <li>The scrollbar itself</li>
+      </ul>
+      <p>Check console to see which element receives the event.</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 5: Inspect DOM Structure</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const ul = document.querySelector('.explorer-ul');
+        console.log('UL children count:', ul.children.length);
+        console.log('Has overflow-end:', !!ul.querySelector('.overflow-end'));
+        console.log('First 3 children:', Array.from(ul.children).slice(0, 3).map(c => c.className));
+        console.log('Last child:', ul.children[ul.children.length - 1]?.className);
+      </code>
+      <p><strong>Expected:</strong> Last child should be 'overflow-end'</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 6: Check for Blocking Overlays</h2>
+    <div class="instruction">
+      <p><strong>In Browser DevTools:</strong></p>
+      <ol>
+        <li>Right-click on a file link in the Explorer</li>
+        <li>Select "Inspect"</li>
+        <li>In the Elements tab, look at the computed styles</li>
+        <li>Check for any elements with high z-index that might be blocking</li>
+        <li>Check if the li or a elements have any transform or position that creates a new stacking context</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 7: Check CSS Specificity</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const ul = document.querySelector('.explorer-ul');
+        const allRules = [];
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule.selectorText && ul.matches(rule.selectorText)) {
+                if (rule.style.overflow || rule.style.overflowY) {
+                  allRules.push({
+                    selector: rule.selectorText,
+                    overflow: rule.style.overflow,
+                    overflowY: rule.style.overflowY
+                  });
+                }
+              }
+            }
+          } catch (e) {}
+        }
+        console.table(allRules);
+      </code>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 8: Manual Scroll Test</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const ul = document.querySelector('.explorer-ul');
+        ul.scrollTop = 100;
+        setTimeout(() => console.log('Current scrollTop:', ul.scrollTop), 100);
+      </code>
+      <p><strong>Expected:</strong> scrollTop should be 100 (or less if not enough content)</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 9: Check IntersectionObserver</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const ul = document.querySelector('.explorer-ul');
+        const overflowEnd = ul.querySelector('.overflow-end');
+        console.log('UL has gradient-active class:', ul.classList.contains('gradient-active'));
+        console.log('overflow-end element:', overflowEnd);
+        
+        if (overflowEnd) {
+          const rect = overflowEnd.getBoundingClientRect();
+          const ulRect = ul.getBoundingClientRect();
+          console.log('overflow-end position:', rect);
+          console.log('ul position:', ulRect);
+          console.log('Is overflow-end visible in ul?', rect.top < ulRect.bottom);
+        }
+      </code>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 10: Check Event Propagation</h2>
+    <div class="instruction">
+      <p><strong>In Browser Console:</strong></p>
+      <code>
+        const checkTarget = (e) => {
+          const path = e.composedPath();
+          console.log('Wheel event path:', path.slice(0, 5).map(el => el.className || el.nodeName));
+          console.log('Target:', e.target.className);
+          console.log('CurrentTarget:', e.currentTarget.className);
+        };
+        
+        document.querySelector('.explorer-ul').addEventListener('wheel', checkTarget);
+        console.log('Now try scrolling. Check which elements are in the event path.');
+      </code>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Quick Fix to Test</h2>
+    <div class="instruction">
+      <p><strong>Try this temporary CSS fix in Browser Console:</strong></p>
+      <code>
+        const style = document.createElement('style');
+        style.textContent = `
+          .explorer-ul li,
+          .explorer-ul li > *,
+          .folder-container,
+          .folder-container > * {
+            pointer-events: auto !important;
+          }
+        `;
+        document.head.appendChild(style);
+        console.log('Temporary fix applied. Try scrolling now.');
+      </code>
+      <p>If this fixes it, the issue is with pointer-events CSS.</p>
+    </div>
+  </div>
+
+  <hr>
+  
+  <h2>What to Report Back</h2>
+  <ol>
+    <li>Results from Test 1 (computed overflow values)</li>
+    <li>Results from Test 4 (which element receives wheel events)</li>
+    <li>Results from Test 5 (DOM structure)</li>
+    <li>Whether the Quick Fix in Test 10 helps</li>
+  </ol>
+</body>
+</html>

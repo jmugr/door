@@ -4,6 +4,16 @@ import { ContentDetails } from "../../plugins/emitters/contentIndex"
 
 type MaybeHTMLElement = HTMLElement | undefined
 
+interface TagNode {
+  name: string
+  displayName: string
+  isFolder: boolean
+  slug: FullSlug
+  children: Map<string, TagNode>
+  items: Array<{ content: ContentDetails; dateMs: number }>
+  count?: number
+}
+
 interface ParsedOptions {
   folderClickBehavior: "collapse" | "link"
   folderDefaultState: "collapsed" | "open"
@@ -20,6 +30,191 @@ type FolderState = {
 }
 
 let currentExplorerState: Array<FolderState>
+
+// Build tag-based tree structure
+function buildTagBasedTree(entries: [FullSlug, ContentDetails][]): FileTrieNode {
+  const makeTagNode = (name: string, displayName: string): TagNode => ({
+    name,
+    displayName,
+    isFolder: true,
+    slug: name as FullSlug,
+    children: new Map(),
+    items: [],
+  })
+
+  const collectRowsByPrefix = (prefix: string): Array<{
+    group: string
+    subtype: string
+    content: ContentDetails
+    dateMs: number
+  }> => {
+    const rows = []
+    for (const [slug, content] of entries) {
+      // Skip index file - it's the home page and shouldn't be categorized
+      if (slug === "index" || slug.endsWith("/index")) {
+        continue
+      }
+
+      const tags = content.tags || []
+      const matchTags = tags.filter((tag) => {
+        const tagStr = tag.toString().replace(/^#/, "")
+        return tagStr.startsWith(`${prefix}/`)
+      })
+
+      const dateMs = content.date ? new Date(content.date).getTime() : 0
+
+      if (matchTags.length === 0) {
+        rows.push({ group: `${prefix}/none`, subtype: "", content, dateMs })
+        continue
+      }
+
+      for (const tag of matchTags) {
+        const tagStr = tag.toString().replace(/^#/, "")
+        const parts = tagStr.split("/")
+        const group = parts.length >= 2 ? `${prefix}/${parts[1]}` : `${prefix}/none`
+        const subtype = parts.length > 2 ? parts.slice(2).join("/") : ""
+        rows.push({ group, subtype, content, dateMs })
+      }
+    }
+    return rows
+  }
+
+  const buildHierarchy = (rows: ReturnType<typeof collectRowsByPrefix>): TagNode[] => {
+    const groupMap = new Map<string, TagNode>()
+    for (const row of rows) {
+      const group = row.group
+      const node = groupMap.get(group) ?? makeTagNode(group, group)
+      if (!groupMap.has(group)) {
+        groupMap.set(group, node)
+      }
+
+      const subparts = row.subtype ? row.subtype.split("/") : []
+      if (subparts.length === 0) {
+        node.items.push({ content: row.content, dateMs: row.dateMs })
+        continue
+      }
+
+      let cursor = node
+      for (const part of subparts) {
+        const child = cursor.children.get(part) ?? makeTagNode(part, part)
+        if (!cursor.children.has(part)) {
+          cursor.children.set(part, child)
+        }
+        cursor = child
+      }
+      cursor.items.push({ content: row.content, dateMs: row.dateMs })
+    }
+
+    return Array.from(groupMap.values())
+  }
+
+  const countNode = (node: TagNode): number => {
+    let count = node.items.length
+    for (const child of node.children.values()) {
+      count += countNode(child)
+    }
+    node.count = count
+    return count
+  }
+
+  const tagNodeToFileTrieNode = (
+    tagNode: TagNode,
+    segments: string[],
+    parentContent?: ContentDetails,
+  ): FileTrieNode<ContentDetails> => {
+    const node = new FileTrieNode<ContentDetails>(segments, parentContent)
+    node.isFolder = true
+    node.displayName = tagNode.displayName
+
+    // Add items (files) sorted by date
+    const sortedItems = [...tagNode.items].sort((a, b) => b.dateMs - a.dateMs)
+    for (const item of sortedItems) {
+      // Use the actual file slug for proper linking
+      const actualSlugSegments = item.content.slug.split("/")
+      const fileNode = new FileTrieNode(actualSlugSegments, item.content)
+      fileNode.isFolder = false
+      node.children.push(fileNode)
+    }
+
+    // Add child folders sorted by count
+    const sortedChildren = Array.from(tagNode.children.values()).sort(
+      (a, b) => (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name),
+    )
+
+    for (const child of sortedChildren) {
+      const childSegments = [...segments, child.name]
+      const childNode = tagNodeToFileTrieNode(child, childSegments)
+      node.children.push(childNode)
+    }
+
+    return node
+  }
+
+  // Build the root node
+  const root = new FileTrieNode<ContentDetails>([], undefined)
+  root.isFolder = true
+
+  // Process "type" tags
+  const typeRows = collectRowsByPrefix("type")
+  const typeGroups = buildHierarchy(typeRows)
+  typeGroups.forEach((node) => countNode(node))
+
+  // Sort groups: /none last, then by count desc, then alphabetically
+  typeGroups.sort((a, b) => {
+    const aNone = a.name.endsWith("/none")
+    const bNone = b.name.endsWith("/none")
+    if (aNone !== bNone) return aNone ? 1 : -1
+    return (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name)
+  })
+
+  // Create "By type" folder
+  const typeFolder = new FileTrieNode<ContentDetails>(["type"], undefined)
+  typeFolder.isFolder = true
+  typeFolder.displayName = "By type"
+
+  for (const group of typeGroups) {
+    const displayName = group.name.startsWith("type/")
+      ? group.name.slice(5)
+      : group.name
+    group.displayName = `${displayName} (${group.count ?? 0})`
+    const groupNode = tagNodeToFileTrieNode(group, ["type", group.name])
+    typeFolder.children.push(groupNode)
+  }
+
+  root.children.push(typeFolder)
+
+  // Process "topic" tags
+  const topicRows = collectRowsByPrefix("topic")
+  const topicGroups = buildHierarchy(topicRows)
+  topicGroups.forEach((node) => countNode(node))
+
+  // Sort groups: /none last, then by count desc, then alphabetically
+  topicGroups.sort((a, b) => {
+    const aNone = a.name.endsWith("/none")
+    const bNone = b.name.endsWith("/none")
+    if (aNone !== bNone) return aNone ? 1 : -1
+    return (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name)
+  })
+
+  // Create "By topic" folder
+  const topicFolder = new FileTrieNode<ContentDetails>(["topic"], undefined)
+  topicFolder.isFolder = true
+  topicFolder.displayName = "By topic"
+
+  for (const group of topicGroups) {
+    const displayName = group.name.startsWith("topic/")
+      ? group.name.slice(6)
+      : group.name
+    group.displayName = `${displayName} (${group.count ?? 0})`
+    const groupNode = tagNodeToFileTrieNode(group, ["topic", group.name])
+    topicFolder.children.push(groupNode)
+  }
+
+  root.children.push(topicFolder)
+
+  return root
+}
+
 function toggleExplorer(this: HTMLElement) {
   const nearestExplorer = this.closest(".explorer") as HTMLElement
   if (!nearestExplorer) return
@@ -178,7 +373,9 @@ async function setupExplorer(currentSlug: FullSlug) {
 
     const data = await fetchData
     const entries = [...Object.entries(data)] as [FullSlug, ContentDetails][]
-    const trie = FileTrieNode.fromEntries(entries)
+    
+    // Build tag-based tree instead of file path tree
+    const trie = buildTagBasedTree(entries)
 
     // Apply functions in order
     for (const fn of opts.order) {
@@ -218,7 +415,13 @@ async function setupExplorer(currentSlug: FullSlug) {
 
       fragment.appendChild(node)
     }
-    explorerUl.insertBefore(fragment, explorerUl.firstChild)
+    // Insert content before the .overflow-end element to preserve scrolling functionality
+    const overflowEnd = explorerUl.querySelector(".overflow-end")
+    if (overflowEnd) {
+      explorerUl.insertBefore(fragment, overflowEnd)
+    } else {
+      explorerUl.appendChild(fragment)
+    }
 
     // restore explorer scrollTop position if it exists
     const scrollTop = sessionStorage.getItem("explorerScrollTop")
