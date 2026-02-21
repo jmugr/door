@@ -50,11 +50,6 @@ function buildTagBasedTree(entries: [FullSlug, ContentDetails][]): FileTrieNode 
   }> => {
     const rows = []
     for (const [slug, content] of entries) {
-      // Skip index file - it's the home page and shouldn't be categorized
-      if (slug === "index" || slug.endsWith("/index")) {
-        continue
-      }
-
       const tags = content.tags || []
       const matchTags = tags.filter((tag) => {
         const tagStr = tag.toString().replace(/^#/, "")
