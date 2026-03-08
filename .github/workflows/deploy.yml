@@ -21,18 +21,18 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Checkout Vault Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: jmugr/vault
           token: ${{ secrets.GH_TOKEN }}
           path: vault
           fetch-depth: 0  # Need full git history for changelog
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install Python Dependencies
@@ -55,7 +55,7 @@ jobs:
           git config user.email "actions@github.com"
           git add "Garage changelog.md"
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update changelog [skip ci]" && git push)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - name: Install Dependencies
@@ -63,7 +63,7 @@ jobs:
       - name: Build Quartz
         run: npx quartz build --directory=vault
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: public
  
