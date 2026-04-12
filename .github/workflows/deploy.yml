@@ -48,13 +48,6 @@ jobs:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
         run: |
           python scripts/create-changelog.py --vault-path=vault
-      - name: Commit and Push Changelog
-        working-directory: vault
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-          git add "Garage changelog.md"
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update changelog [skip ci]" && git push)
       - uses: actions/setup-node@v4
         with:
           node-version: 22
