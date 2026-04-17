@@ -21,6 +21,15 @@ import { getStaticResourcesFromPlugins } from "./plugins"
 import { randomIdNonSecure } from "./util/random"
 import { ChangeEvent } from "./plugins/types"
 import { minimatch } from "minimatch"
+import { readFrontmatter } from "./plugins/transformers/frontmatter"
+
+function isEligibleForParse(data: Record<string, unknown> | null, verbose: boolean, fp: string): boolean {
+  if (data === null) {
+    if (verbose) console.log(`[prefilter] failed to read frontmatter, including: ${fp}`)
+    return true // fail open
+  }
+  return data.publish === true || data.publish === "true"
+}
 
 type ContentMap = Map<
   FilePath,
@@ -81,7 +90,19 @@ async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
   ctx.allFiles = allFiles
   ctx.allSlugs = allFiles.map((fp) => slugifyFilePath(fp as FilePath))
 
-  const parsedFiles = await parseMarkdown(ctx, filePaths)
+  perf.addEvent("prefilter")
+  const eligibilityResults = await Promise.all(
+    filePaths.map(async (fp) => {
+      const data = await readFrontmatter(fp)
+      return isEligibleForParse(data, argv.verbose ?? false, fp)
+    }),
+  )
+  const pathsToParse = filePaths.filter((_, i) => eligibilityResults[i])
+  console.log(
+    `Pre-parse filter: ${pathsToParse.length}/${filePaths.length} markdown files eligible in ${perf.timeSince("prefilter")}`,
+  )
+
+  const parsedFiles = await parseMarkdown(ctx, pathsToParse)
   const filteredContent = filterContent(ctx, parsedFiles)
 
   await emitContent(ctx, filteredContent)
@@ -205,7 +226,13 @@ async function rebuild(changes: ChangeEvent[], clientRefresh: () => void, buildD
   for (const [fp, type] of Object.entries(changesSinceLastBuild)) {
     if (type === "delete" || path.extname(fp) !== ".md") continue
     const fullPath = joinSegments(argv.directory, toPosixPath(fp)) as FilePath
-    pathsToParse.push(fullPath)
+    const data = await readFrontmatter(fullPath)
+    if (isEligibleForParse(data, argv.verbose ?? false, fp)) {
+      pathsToParse.push(fullPath)
+    } else {
+      // became ineligible: remove from contentMap if it was previously parsed
+      contentMap.delete(fp as FilePath)
+    }
   }
 
   const parsed = await parseMarkdown(ctx, pathsToParse)

@@ -6,6 +6,22 @@ import toml from "toml"
 import { FilePath, FullSlug, getFileExtension, slugifyFilePath, slugTag } from "../../util/path"
 import { QuartzPluginData } from "../vfile"
 import { i18n } from "../../i18n"
+import { readFile } from "fs/promises"
+
+const frontmatterEngines = {
+  yaml: (s: string) => yaml.load(s, { schema: yaml.JSON_SCHEMA }) as object,
+  toml: (s: string) => toml.parse(s) as object,
+}
+
+export async function readFrontmatter(fp: string): Promise<Record<string, unknown> | null> {
+  try {
+    const fileData = await readFile(fp)
+    const { data } = matter(fileData, { delimiters: "---", engines: frontmatterEngines })
+    return data as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
 
 export interface Options {
   delimiters: string | [string, string]
@@ -65,10 +81,7 @@ export const FrontMatter: QuartzTransformerPlugin<Partial<Options>> = (userOpts)
             const fileData = Buffer.from(file.value as Uint8Array)
             const { data } = matter(fileData, {
               ...opts,
-              engines: {
-                yaml: (s) => yaml.load(s, { schema: yaml.JSON_SCHEMA }) as object,
-                toml: (s) => toml.parse(s) as object,
-              },
+              engines: frontmatterEngines,
             })
 
             if (data.title != null && data.title.toString() !== "") {
