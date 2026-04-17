@@ -5,7 +5,7 @@ import BodyConstructor from "./Body"
 import { JSResourceToScriptElement, StaticResources } from "../util/resources"
 import { FullSlug, RelativeURL, joinSegments, normalizeHastElement } from "../util/path"
 import { clone } from "../util/clone"
-import { visit } from "unist-util-visit"
+import { visit, SKIP } from "unist-util-visit"
 import { Root, Element, ElementContent } from "hast"
 import { GlobalConfiguration } from "../cfg"
 import { i18n } from "../i18n"
@@ -100,7 +100,9 @@ function renderTranscludes(
           ]
           return
         }
-        visited.add(transcludeTarget)
+        // Build a path-scoped set for this transclusion branch so sibling embeds
+        // to the same target are allowed, but true cycles (A -> B -> A) are still caught.
+        const childVisited = new Set([...visited, transcludeTarget])
 
         const page = componentData.allFiles.find((f) => f.slug === transcludeTarget)
         if (!page) {
@@ -207,6 +209,12 @@ function renderTranscludes(
             },
           ]
         }
+        // Recurse into the newly inserted children using the path-scoped visited set,
+        // then skip so the outer visit doesn't descend into them again.
+        const tempRoot = { type: "root", children: node.children } as Root
+        renderTranscludes(tempRoot, cfg, transcludeTarget, componentData, childVisited)
+        node.children = tempRoot.children as Element["children"]
+        return SKIP
       }
     }
   })
