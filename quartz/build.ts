@@ -22,6 +22,8 @@ import { randomIdNonSecure } from "./util/random"
 import { ChangeEvent } from "./plugins/types"
 import { minimatch } from "minimatch"
 import { readFrontmatter } from "./plugins/transformers/frontmatter"
+import { visit } from "unist-util-visit"
+import { Element, Root } from "hast"
 
 function isEligibleForParse(data: Record<string, unknown> | null, verbose: boolean, fp: string): boolean {
   if (data === null) {
@@ -49,6 +51,28 @@ type BuildData = {
   contentMap: ContentMap
   changesSinceLastBuild: Record<FilePath, ChangeEvent["type"]>
   lastBuildMs: number
+}
+
+function collectTransclusionTargets(content: ProcessedContent[]): Set<string> {
+  const targets = new Set<string>()
+
+  for (const [tree] of content) {
+    visit(tree as Root, "element", (node: Element) => {
+      if (node.tagName !== "blockquote") return
+      const classNames = (node.properties?.className ?? []) as string[]
+      if (!classNames.includes("transclude")) return
+
+      const inner = node.children[0] as Element | undefined
+      const dataSlug = inner?.properties?.["data-slug"]
+      const dataUrl = node.properties?.["data-url"]
+      const target = typeof dataSlug === "string" ? dataSlug : typeof dataUrl === "string" ? dataUrl : null
+      if (target !== null) {
+        targets.add(target)
+      }
+    })
+  }
+
+  return targets
 }
 
 async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
@@ -104,6 +128,36 @@ async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
 
   const parsedFiles = await parseMarkdown(ctx, pathsToParse)
   const filteredContent = filterContent(ctx, parsedFiles)
+
+  perf.addEvent("transclude-prefetch")
+  const slugToPath = new Map<string, FilePath>()
+  for (const fp of markdownPaths) {
+    const relPath = fp as FilePath
+    const slug = slugifyFilePath(relPath)
+    slugToPath.set(slug, joinSegments(argv.directory, relPath) as FilePath)
+  }
+
+  const parsedBySlug = new Set<string>()
+  for (const [_tree, file] of parsedFiles) {
+    if (typeof file.data.slug === "string") {
+      parsedBySlug.add(file.data.slug)
+    }
+  }
+
+  const targets = collectTransclusionTargets(filteredContent)
+  const transcludeOnlyPaths: FilePath[] = []
+  for (const target of targets) {
+    const pathForTarget = slugToPath.get(target)
+    if (pathForTarget === undefined) continue
+    if (parsedBySlug.has(target)) continue
+    transcludeOnlyPaths.push(pathForTarget)
+    parsedBySlug.add(target)
+  }
+
+  ctx.transcludeOnly = await parseMarkdown(ctx, transcludeOnlyPaths)
+  console.log(
+    `Transclusion dependency parse: ${ctx.transcludeOnly.length} file(s) in ${perf.timeSince("transclude-prefetch")}`,
+  )
 
   await emitContent(ctx, filteredContent)
   console.log(

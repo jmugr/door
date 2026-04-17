@@ -71,6 +71,8 @@ function renderTranscludes(
   componentData: QuartzComponentProps,
   visited: Set<FullSlug>,
 ) {
+  const transcludeFiles = componentData.transcludeFiles ?? componentData.allFiles
+
   // process transcludes in componentData
   visit(root, "element", (node, _index, _parent) => {
     if (node.tagName === "blockquote") {
@@ -104,7 +106,7 @@ function renderTranscludes(
         // to the same target are allowed, but true cycles (A -> B -> A) are still caught.
         const childVisited = new Set([...visited, transcludeTarget])
 
-        const page = componentData.allFiles.find((f) => f.slug === transcludeTarget)
+        const page = transcludeFiles.find((f) => f.slug === transcludeTarget)
         if (!page) {
           return
         }

@@ -1,4 +1,5 @@
 import { QuartzConfig } from "../cfg"
+import { ProcessedContent } from "../plugins/vfile"
 import { QuartzPluginData } from "../plugins/vfile"
 import { FileTrieNode } from "./fileTrie"
 import { FilePath, FullSlug } from "./path"
@@ -27,6 +28,7 @@ export interface BuildCtx {
   cfg: QuartzConfig
   allSlugs: FullSlug[]
   allFiles: FilePath[]
+  transcludeOnly?: ProcessedContent[]
   trie?: FileTrieNode<BuildTimeTrieData>
   incremental: boolean
 }
@@ -47,4 +49,4 @@ export function trieFromAllFiles(allFiles: QuartzPluginData[]): FileTrieNode<Bui
   return trie
 }
 
-export type WorkerSerializableBuildCtx = Omit<BuildCtx, "cfg" | "trie">
+export type WorkerSerializableBuildCtx = Omit<BuildCtx, "cfg" | "trie" | "transcludeOnly">

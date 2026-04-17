@@ -18,6 +18,27 @@ import { visit } from "unist-util-visit"
 import { Root, Element } from "hast"
 import isAbsoluteUrl from "is-absolute-url"
 
+function createTransclusionLookup(
+  publishedFiles: QuartzPluginData[],
+  transcludeOnlyFiles: QuartzPluginData[] = [],
+): QuartzPluginData[] {
+  const bySlug = new Map<string, QuartzPluginData>()
+
+  for (const file of publishedFiles) {
+    if (typeof file.slug === "string") {
+      bySlug.set(file.slug, file)
+    }
+  }
+
+  for (const file of transcludeOnlyFiles) {
+    if (typeof file.slug === "string" && !bySlug.has(file.slug)) {
+      bySlug.set(file.slug, file)
+    }
+  }
+
+  return Array.from(bySlug.values())
+}
+
 async function processContent(
   ctx: BuildCtx,
   tree: Node,
@@ -72,6 +93,8 @@ async function processContent(
   })
 
   const externalResources = pageResources(pathToRoot(slug), resources)
+  const transcludeOnlyFiles = (ctx.transcludeOnly ?? []).map((c) => c[1].data)
+  const transcludeFiles = createTransclusionLookup(allFiles, transcludeOnlyFiles)
   const componentData: QuartzComponentProps = {
     ctx,
     fileData,
@@ -80,6 +103,7 @@ async function processContent(
     children: [],
     tree,
     allFiles,
+    transcludeFiles,
   }
 
   const content = renderPage(cfg, slug, componentData, opts, externalResources)
