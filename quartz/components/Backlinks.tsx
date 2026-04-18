@@ -13,6 +13,8 @@ const defaultOptions: BacklinksOptions = {
   hideWhenEmpty: true,
 }
 
+const excludedBacklinkTitle = "Garage changelog"
+
 export default ((opts?: Partial<BacklinksOptions>) => {
   const options: BacklinksOptions = { ...defaultOptions, ...opts }
   const { OverflowList, overflowListAfterDOMLoaded } = OverflowListFactory()
@@ -24,7 +26,11 @@ export default ((opts?: Partial<BacklinksOptions>) => {
     cfg,
   }: QuartzComponentProps) => {
     const slug = simplifySlug(fileData.slug!)
-    const backlinkFiles = allFiles.filter((file) => file.links?.includes(slug))
+    const backlinkFiles = allFiles.filter(
+      (file) =>
+        file.links?.includes(slug) &&
+        file.frontmatter?.title !== excludedBacklinkTitle,
+    )
     if (options.hideWhenEmpty && backlinkFiles.length == 0) {
       return null
     }
