@@ -13,7 +13,16 @@ const defaultOptions: BacklinksOptions = {
   hideWhenEmpty: true,
 }
 
-const excludedBacklinkTitle = "Garage changelog"
+const excludedBacklinkFileName = "Garage changelog.md"
+
+function isExcludedBacklinkFile(relativePath?: string): boolean {
+  if (!relativePath) {
+    return false
+  }
+
+  const fileName = relativePath.split("/").pop()?.split("\\").pop()
+  return fileName?.toLowerCase() === excludedBacklinkFileName.toLowerCase()
+}
 
 export default ((opts?: Partial<BacklinksOptions>) => {
   const options: BacklinksOptions = { ...defaultOptions, ...opts }
@@ -29,7 +38,7 @@ export default ((opts?: Partial<BacklinksOptions>) => {
     const backlinkFiles = allFiles.filter(
       (file) =>
         file.links?.includes(slug) &&
-        file.frontmatter?.title !== excludedBacklinkTitle,
+        !isExcludedBacklinkFile(file.relativePath),
     )
     if (options.hideWhenEmpty && backlinkFiles.length == 0) {
       return null

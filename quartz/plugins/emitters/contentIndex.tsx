@@ -39,7 +39,16 @@ const defaultOptions: Options = {
   includeEmptyFiles: true,
 }
 
-const excludedGraphTitle = "Garage changelog"
+const excludedGraphFileName = "Garage changelog.md"
+
+function isExcludedGraphFile(relativePath?: string): boolean {
+  if (!relativePath) {
+    return false
+  }
+
+  const fileName = relativePath.split("/").pop()?.split("\\").pop()
+  return fileName?.toLowerCase() === excludedGraphFileName.toLowerCase()
+}
 
 function generateSiteMap(cfg: GlobalConfiguration, idx: ContentIndexMap): string {
   const base = cfg.baseUrl ?? ""
@@ -103,15 +112,16 @@ export const ContentIndex: QuartzEmitterPlugin<Partial<Options>> = (opts) => {
       const linkIndex: ContentIndexMap = new Map()
       for (const [tree, file] of content) {
         const slug = file.data.slug!
-        const title = file.data.frontmatter?.title
-        if (title === excludedGraphTitle) {
+        const relativePath = file.data.relativePath
+        if (isExcludedGraphFile(relativePath)) {
           continue
         }
+        const title = file.data.frontmatter?.title
         const date = getDate(ctx.cfg.configuration, file.data) ?? new Date()
         if (opts?.includeEmptyFiles || (file.data.text && file.data.text !== "")) {
           linkIndex.set(slug, {
             slug,
-            filePath: file.data.relativePath!,
+            filePath: relativePath!,
             title: title!,
             links: file.data.links ?? [],
             tags: file.data.frontmatter?.tags ?? [],
