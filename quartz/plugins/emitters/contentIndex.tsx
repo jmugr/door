@@ -28,6 +28,7 @@ interface Options {
   rssFullHtml: boolean
   rssSlug: string
   includeEmptyFiles: boolean
+  excludeChangelogFromGraph: boolean
 }
 
 const defaultOptions: Options = {
@@ -37,6 +38,7 @@ const defaultOptions: Options = {
   rssFullHtml: false,
   rssSlug: "index",
   includeEmptyFiles: true,
+  excludeChangelogFromGraph: false,
 }
 
 const excludedGraphFileName = "Garage changelog.md"
@@ -113,7 +115,7 @@ export const ContentIndex: QuartzEmitterPlugin<Partial<Options>> = (opts) => {
       for (const [tree, file] of content) {
         const slug = file.data.slug!
         const relativePath = file.data.relativePath
-        if (isExcludedGraphFile(relativePath)) {
+        if (opts?.excludeChangelogFromGraph && isExcludedGraphFile(relativePath)) {
           continue
         }
         const title = file.data.frontmatter?.title

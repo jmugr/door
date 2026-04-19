@@ -7,10 +7,12 @@ import OverflowListFactory from "./OverflowList"
 
 interface BacklinksOptions {
   hideWhenEmpty: boolean
+  excludeChangelogFromBacklinks: boolean
 }
 
 const defaultOptions: BacklinksOptions = {
   hideWhenEmpty: true,
+  excludeChangelogFromBacklinks: true,
 }
 
 const excludedBacklinkFileName = "Garage changelog.md"
@@ -38,7 +40,7 @@ export default ((opts?: Partial<BacklinksOptions>) => {
     const backlinkFiles = allFiles.filter(
       (file) =>
         file.links?.includes(slug) &&
-        !isExcludedBacklinkFile(file.relativePath),
+        !(options.excludeChangelogFromBacklinks && isExcludedBacklinkFile(file.relativePath)),
     )
     if (options.hideWhenEmpty && backlinkFiles.length == 0) {
       return null
