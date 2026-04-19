@@ -38,7 +38,7 @@ const defaultOptions: Options = {
   rssFullHtml: false,
   rssSlug: "index",
   includeEmptyFiles: true,
-  excludeChangelogFromGraph: false,
+  excludeChangelogFromGraph: true,
 }
 
 const excludedGraphFileName = "Garage changelog.md"
