@@ -166,6 +166,15 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
             old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
             old_renamed_paths.add(old_display)
     
+    # Build set of (date_str, old_path) for renames that are also same-day first appearances
+    same_day_publish_renames = set()
+    for date_str, rename_events in rename_events_by_day.items():
+        for old_path, new_path in rename_events:
+            current_name = get_current_name(new_path)
+            if (old_path in (changes_by_day.get(date_str) or set()) and
+                    first_appearance.get(current_name) == date_str):
+                same_day_publish_renames.add((date_str, old_path))
+    
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("---\n")
         f.write("publish: true\n")
@@ -184,7 +193,11 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
             for old_path, new_path in rename_events:
                 old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
                 new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
-                f.write(f"- Renamed: ~~{old_display}~~ to [[{new_display}]]\n")
+                if (date_str, old_path) in same_day_publish_renames:
+                    # Published and renamed on the same day — show as a single Published line
+                    f.write(f"- **Published: [[{new_display}]]**\n")
+                else:
+                    f.write(f"- Renamed: ~~{old_display}~~ to [[{new_display}]]\n")
             
             # Write regular changes
             files = changes_by_day.get(date_str, [])
@@ -193,7 +206,8 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
                 current_name = get_current_name(file_path)
                 if display_name in old_renamed_paths:
                     if first_appearance.get(current_name) == date_str:
-                        f.write(f"- **Published: {display_name}**\n")
+                        # Already emitted as a consolidated Published line in the rename loop above
+                        continue
                     else:
                         f.write(f"- Changed: {display_name}\n")
                 else:
@@ -310,6 +324,15 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
                 old_renamed_paths.add(old_display)
         
+        # Build set of (date_str, old_path) for renames that are also same-day first appearances
+        same_day_publish_renames = set()
+        for date_str, rename_events in rename_events_by_day.items():
+            for old_path, new_path in rename_events:
+                current_name = get_current_name(new_path)
+                if (old_path in (changes_by_day.get(date_str) or set()) and
+                        first_appearance.get(current_name) == date_str):
+                    same_day_publish_renames.add((date_str, old_path))
+        
         # Format data for Firebase latest
         firebase_data = {}
         
@@ -320,7 +343,7 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 for file_path in changes_by_day[date_str]:
                     display_name = file_path[:-3] if file_path.endswith('.md') else file_path
                     current_name = get_current_name(file_path)
-                    # Skip old renamed paths
+                    # Skip old renamed paths (same-day publish-renames handled in rename loop below)
                     if display_name in old_renamed_paths:
                         continue
                     is_new = first_appearance.get(current_name) == date_str
@@ -336,12 +359,20 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 for old_path, new_path in sorted(rename_events_by_day[date_str]):
                     old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
                     new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
-                    daily_renames.append({
-                        'oldName': old_display,
-                        'newName': new_display,
-                        'oldPath': old_path,
-                        'newPath': new_path
-                    })
+                    if (date_str, old_path) in same_day_publish_renames:
+                        # Published and renamed on the same day — emit as a new change entry
+                        daily_changes.append({
+                            'name': new_display,
+                            'path': new_path,
+                            'new': True
+                        })
+                    else:
+                        daily_renames.append({
+                            'oldName': old_display,
+                            'newName': new_display,
+                            'oldPath': old_path,
+                            'newPath': new_path
+                        })
             
             firebase_data[date_str] = {
                 'timestamp': datetime.now(ZoneInfo("America/Chicago")).isoformat(),
@@ -387,6 +418,13 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                     for old_path, new_path in sorted(pending_renames_by_day[date_str]):
                         old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
                         new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
+                        if (date_str, old_path) in same_day_publish_renames:
+                            daily_changes.append({
+                                'name': new_display,
+                                'path': new_path,
+                                'new': True
+                            })
+                            continue
                         daily_renames.append({
                             'oldName': old_display,
                             'newName': new_display,
