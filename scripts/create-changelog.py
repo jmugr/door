@@ -249,6 +249,22 @@ def filter_new_changes(changes_by_day, rename_events_by_day, last_sent_by_date):
     
     Returns filtered changes, filtered renames, and total count.
     """
+    # Build rename mapping so we can resolve old git paths to their current names.
+    # sent_changes was recorded using the current name at time of send, which may
+    # differ from the raw git path stored in changes_by_day for renamed files.
+    rename_mapping = {}
+    for rename_events in rename_events_by_day.values():
+        for old_path, new_path in rename_events:
+            rename_mapping[old_path] = new_path
+
+    def get_current_name(file_path):
+        current = file_path
+        seen = set()
+        while current in rename_mapping and current not in seen:
+            seen.add(current)
+            current = rename_mapping[current]
+        return current
+
     filtered_changes = {}
     filtered_renames = {}
     new_items_count = 0
@@ -259,8 +275,13 @@ def filter_new_changes(changes_by_day, rename_events_by_day, last_sent_by_date):
         sent_data = last_sent_by_date.get(date_str, {})
         sent_changes = sent_data.get('changes', set()) if isinstance(sent_data, dict) else sent_data
         
-        # Include files not yet sent for this specific date
-        new_files = [f for f in files if f not in sent_changes]
+        # Include files not yet sent for this specific date.
+        # Check both the raw git path AND the current name (after rename chain),
+        # because sent_changes may store either form depending on when it was recorded.
+        new_files = [
+            f for f in files
+            if f not in sent_changes and get_current_name(f) not in sent_changes
+        ]
         if new_files:
             filtered_changes[date_str] = new_files
             new_items_count += len(new_files)
