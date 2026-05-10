@@ -138,6 +138,79 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
     
     return sorted_changes, first_appearance, rename_events_by_day
 
+def display_name_for_path(file_path):
+    """Convert a markdown path to a display name without extension."""
+    if file_path and file_path.endswith('.md'):
+        return file_path[:-3]
+    return file_path
+
+def aggregate_daily_activity(date_str, daily_changes, daily_renames, first_appearance, get_current_name):
+    """Return one entry per file for a day using priority: Published > Renamed > Changed."""
+    priority_by_status = {
+        'changed': 1,
+        'renamed': 2,
+        'published': 3,
+    }
+    selected = {}
+
+    def is_new_for_date(*paths):
+        for path in paths:
+            if path and first_appearance.get(path) == date_str:
+                return True
+        return False
+
+    def upsert(current_path, candidate):
+        existing = selected.get(current_path)
+        if not existing:
+            selected[current_path] = candidate
+            return
+        if priority_by_status[candidate['status']] > priority_by_status[existing['status']]:
+            selected[current_path] = candidate
+
+    for file_path in sorted(daily_changes or []):
+        current_path = get_current_name(file_path)
+        is_new = is_new_for_date(current_path, file_path)
+        upsert(current_path, {
+            'status': 'published' if is_new else 'changed',
+            'name': display_name_for_path(current_path),
+            'path': current_path,
+            'new': is_new,
+        })
+
+    for old_path, new_path in sorted(daily_renames or []):
+        current_path = get_current_name(new_path or old_path)
+        is_new = is_new_for_date(current_path, new_path, old_path)
+        if is_new:
+            upsert(current_path, {
+                'status': 'published',
+                'name': display_name_for_path(new_path or current_path),
+                'path': new_path or current_path,
+                'new': True,
+            })
+        else:
+            upsert(current_path, {
+                'status': 'renamed',
+                'oldName': display_name_for_path(old_path),
+                'newName': display_name_for_path(new_path or current_path),
+                'oldPath': old_path,
+                'newPath': new_path or current_path,
+            })
+
+    published = sorted(
+        [entry for entry in selected.values() if entry['status'] == 'published'],
+        key=lambda entry: entry['name']
+    )
+    renamed = sorted(
+        [entry for entry in selected.values() if entry['status'] == 'renamed'],
+        key=lambda entry: entry['newName']
+    )
+    changed = sorted(
+        [entry for entry in selected.values() if entry['status'] == 'changed'],
+        key=lambda entry: entry['name']
+    )
+
+    return published, renamed, changed
+
 def write_changelog(changes_by_day, first_appearance, rename_events_by_day, changelog_filename, vault_path):
     """Write the changelog to a markdown file."""
     output_path = Path(vault_path) / changelog_filename
@@ -159,22 +232,6 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
     
     all_dates = sorted(set(changes_by_day.keys()) | set(rename_events_by_day.keys()), reverse=True)
     
-    # Build set of old file paths that were renamed
-    old_renamed_paths = set()
-    for rename_events in rename_events_by_day.values():
-        for old_path, new_path in rename_events:
-            old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
-            old_renamed_paths.add(old_display)
-    
-    # Build set of (date_str, old_path) for renames that are also same-day first appearances
-    same_day_publish_renames = set()
-    for date_str, rename_events in rename_events_by_day.items():
-        for old_path, new_path in rename_events:
-            current_name = get_current_name(new_path)
-            if (old_path in (changes_by_day.get(date_str) or set()) and
-                    first_appearance.get(current_name) == date_str):
-                same_day_publish_renames.add((date_str, old_path))
-    
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("---\n")
         f.write("publish: true\n")
@@ -187,34 +244,23 @@ def write_changelog(changes_by_day, first_appearance, rename_events_by_day, chan
         
         for date_str in all_dates:
             f.write(f"## {date_str}\n")
-            
-            # Write rename events
-            rename_events = sorted(rename_events_by_day.get(date_str, set()))
-            for old_path, new_path in rename_events:
-                old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
-                new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
-                if (date_str, old_path) in same_day_publish_renames:
-                    # Published and renamed on the same day — show as a single Published line
-                    f.write(f"- **Published: [[{new_display}]]**\n")
-                else:
-                    f.write(f"- Renamed: ~~{old_display}~~ to [[{new_display}]]\n")
-            
-            # Write regular changes
-            files = changes_by_day.get(date_str, [])
-            for file_path in files:
-                display_name = file_path[:-3] if file_path.endswith('.md') else file_path
-                current_name = get_current_name(file_path)
-                if display_name in old_renamed_paths:
-                    if first_appearance.get(current_name) == date_str:
-                        # Already emitted as a consolidated Published line in the rename loop above
-                        continue
-                    else:
-                        f.write(f"- Changed: {display_name}\n")
-                else:
-                    if first_appearance.get(current_name) == date_str:
-                        f.write(f"- **Published: [[{display_name}]]**\n")
-                    else:
-                        f.write(f"- Changed: [[{display_name}]]\n")
+
+            published_entries, renamed_entries, changed_entries = aggregate_daily_activity(
+                date_str,
+                changes_by_day.get(date_str, []),
+                rename_events_by_day.get(date_str, set()),
+                first_appearance,
+                get_current_name,
+            )
+
+            for entry in published_entries:
+                f.write(f"- **Published: [[{entry['name']}]]**\n")
+
+            for entry in renamed_entries:
+                f.write(f"- Renamed: ~~{entry['oldName']}~~ to [[{entry['newName']}]]\n")
+
+            for entry in changed_entries:
+                f.write(f"- Changed: [[{entry['name']}]]\n")
     
     print(f"Changelog written to {output_path}")
 
@@ -338,62 +384,44 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 current = rename_mapping[current]
             return current
         
-        # Build set of old file paths that were renamed (exclude from changes)
-        old_renamed_paths = set()
-        for rename_events in rename_events_by_day.values():
-            for old_path, new_path in rename_events:
-                old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
-                old_renamed_paths.add(old_display)
-        
-        # Build set of (date_str, old_path) for renames that are also same-day first appearances
-        same_day_publish_renames = set()
-        for date_str, rename_events in rename_events_by_day.items():
-            for old_path, new_path in rename_events:
-                current_name = get_current_name(new_path)
-                if (old_path in (changes_by_day.get(date_str) or set()) and
-                        first_appearance.get(current_name) == date_str):
-                    same_day_publish_renames.add((date_str, old_path))
-        
         # Format data for Firebase latest
         firebase_data = {}
         
         for date_str in sorted(set(changes_by_day.keys()) | set(rename_events_by_day.keys()), reverse=True):
-            # Build changes list
-            daily_changes = []
-            if date_str in changes_by_day:
-                for file_path in changes_by_day[date_str]:
-                    display_name = file_path[:-3] if file_path.endswith('.md') else file_path
-                    current_name = get_current_name(file_path)
-                    # Skip old renamed paths (same-day publish-renames handled in rename loop below)
-                    if display_name in old_renamed_paths:
-                        continue
-                    is_new = first_appearance.get(current_name) == date_str
-                    daily_changes.append({
-                        'name': display_name,
-                        'path': file_path,
-                        'new': is_new
-                    })
-            
-            # Build renames list
-            daily_renames = []
-            if date_str in rename_events_by_day:
-                for old_path, new_path in sorted(rename_events_by_day[date_str]):
-                    old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
-                    new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
-                    if (date_str, old_path) in same_day_publish_renames:
-                        # Published and renamed on the same day — emit as a new change entry
-                        daily_changes.append({
-                            'name': new_display,
-                            'path': new_path,
-                            'new': True
-                        })
-                    else:
-                        daily_renames.append({
-                            'oldName': old_display,
-                            'newName': new_display,
-                            'oldPath': old_path,
-                            'newPath': new_path
-                        })
+            published_entries, renamed_entries, changed_entries = aggregate_daily_activity(
+                date_str,
+                changes_by_day.get(date_str, []),
+                rename_events_by_day.get(date_str, set()),
+                first_appearance,
+                get_current_name,
+            )
+
+            daily_changes = [
+                {
+                    'name': entry['name'],
+                    'path': entry['path'],
+                    'new': True,
+                }
+                for entry in published_entries
+            ]
+            daily_changes.extend(
+                {
+                    'name': entry['name'],
+                    'path': entry['path'],
+                    'new': False,
+                }
+                for entry in changed_entries
+            )
+
+            daily_renames = [
+                {
+                    'oldName': entry['oldName'],
+                    'newName': entry['newName'],
+                    'oldPath': entry['oldPath'],
+                    'newPath': entry['newPath'],
+                }
+                for entry in renamed_entries
+            ]
             
             firebase_data[date_str] = {
                 'timestamp': datetime.now(ZoneInfo("America/Chicago")).isoformat(),
@@ -417,41 +445,40 @@ def write_to_firebase(changes_by_day, first_appearance, rename_events_by_day, pe
                 all_pending_dates.update(pending_renames_by_day.keys())
             
             for date_str in all_pending_dates:
-                # Build pending changes
-                daily_changes = []
-                if pending_by_day and date_str in pending_by_day:
-                    for file_path in pending_by_day[date_str]:
-                        display_name = file_path[:-3] if file_path.endswith('.md') else file_path
-                        current_name = get_current_name(file_path)
-                        # Skip old renamed paths
-                        if display_name in old_renamed_paths:
-                            continue
-                        is_new = first_appearance.get(current_name) == date_str
-                        daily_changes.append({
-                            'name': display_name,
-                            'path': file_path,
-                            'new': is_new
-                        })
-                
-                # Build pending renames
-                daily_renames = []
-                if pending_renames_by_day and date_str in pending_renames_by_day:
-                    for old_path, new_path in sorted(pending_renames_by_day[date_str]):
-                        old_display = old_path[:-3] if old_path and old_path.endswith('.md') else old_path
-                        new_display = new_path[:-3] if new_path and new_path.endswith('.md') else new_path
-                        if (date_str, old_path) in same_day_publish_renames:
-                            daily_changes.append({
-                                'name': new_display,
-                                'path': new_path,
-                                'new': True
-                            })
-                            continue
-                        daily_renames.append({
-                            'oldName': old_display,
-                            'newName': new_display,
-                            'oldPath': old_path,
-                            'newPath': new_path
-                        })
+                published_entries, renamed_entries, changed_entries = aggregate_daily_activity(
+                    date_str,
+                    pending_by_day.get(date_str, []) if pending_by_day else [],
+                    pending_renames_by_day.get(date_str, []) if pending_renames_by_day else [],
+                    first_appearance,
+                    get_current_name,
+                )
+
+                daily_changes = [
+                    {
+                        'name': entry['name'],
+                        'path': entry['path'],
+                        'new': True,
+                    }
+                    for entry in published_entries
+                ]
+                daily_changes.extend(
+                    {
+                        'name': entry['name'],
+                        'path': entry['path'],
+                        'new': False,
+                    }
+                    for entry in changed_entries
+                )
+
+                daily_renames = [
+                    {
+                        'oldName': entry['oldName'],
+                        'newName': entry['newName'],
+                        'oldPath': entry['oldPath'],
+                        'newPath': entry['newPath'],
+                    }
+                    for entry in renamed_entries
+                ]
                 
                 # Only add entries with actual changes or renames
                 if daily_changes or daily_renames:
