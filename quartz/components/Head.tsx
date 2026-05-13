@@ -85,6 +85,20 @@ export default (() => {
         <link rel="icon" href={iconPath} />
         <meta name="description" content={description} />
         <meta name="generator" content="Quartz" />
+        <script>
+          {`
+            window.umamiBeforeSendHandler = function(type, payload) {
+              try {
+                if (localStorage.getItem("is_my_device") === "true") {
+                  return false;
+                }
+              } catch (_) {
+                // Ignore storage access errors and continue tracking.
+              }
+              return payload;
+            };
+          `}
+        </script>
 
         {css.map((resource) => CSSResourceToStyleElement(resource, true))}
         {js
