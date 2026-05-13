@@ -133,7 +133,7 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
     # Also track first appearance from rename events (files that are renamed but never changed)
     for date_str in reversed(list(rename_events_by_day.keys())):
         for old_path, new_path in rename_events_by_day[date_str]:
-            current_name = get_current_name(new_path)
+            current_name = get_current_name(new_path, rename_mapping)
             if current_name not in first_appearance:
                 first_appearance[current_name] = date_str
             if new_path not in first_appearance:
