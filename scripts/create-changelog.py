@@ -120,6 +120,8 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
     
     # Track first appearance of each file
     first_appearance = {}
+    
+    # Track from regular changes
     for date_str in reversed(list(sorted_changes.keys())):
         for file_path in sorted_changes[date_str]:
             current_name = get_current_name(file_path, rename_mapping)
@@ -127,6 +129,15 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
                 first_appearance[current_name] = date_str
             if file_path not in first_appearance:
                 first_appearance[file_path] = date_str
+    
+    # Also track first appearance from rename events (files that are renamed but never changed)
+    for date_str in reversed(list(rename_events_by_day.keys())):
+        for old_path, new_path in rename_events_by_day[date_str]:
+            current_name = get_current_name(new_path)
+            if current_name not in first_appearance:
+                first_appearance[current_name] = date_str
+            if new_path not in first_appearance:
+                first_appearance[new_path] = date_str
     
     # Remove changelog from all dates except its first appearance
     for date_str in list(sorted_changes.keys()):
