@@ -126,10 +126,8 @@ function addGlobalPageResources(ctx: BuildCtx, componentResources: ComponentReso
   } else if (cfg.analytics?.provider === "umami") {
     componentResources.beforeDOMLoaded.push(`
       window.umamiBeforeSendHandler = function(type, payload) {
-        console.log("umamiBeforeSendHandler called", type, payload);
         try {
           if (localStorage.getItem("is_my_device") === "true") {
-            console.log("Blocking event: is_my_device is true");
             return false;
           }
         } catch (_) {
