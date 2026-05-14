@@ -124,6 +124,21 @@ function addGlobalPageResources(ctx: BuildCtx, componentResources: ComponentReso
       document.head.appendChild(plausibleScript);
     `)
   } else if (cfg.analytics?.provider === "umami") {
+    componentResources.beforeDOMLoaded.push(`
+      window.umamiBeforeSendHandler = function(type, payload) {
+        console.log("umamiBeforeSendHandler called", type, payload);
+        try {
+          if (localStorage.getItem("is_my_device") === "true") {
+            console.log("Blocking event: is_my_device is true");
+            return false;
+          }
+        } catch (_) {
+          // Ignore storage access errors and continue tracking.
+        }
+        return payload;
+      };
+    `)
+
     componentResources.afterDOMLoaded.push(`
       const umamiScript = document.createElement("script");
       umamiScript.src = "${cfg.analytics.host ?? "https://analytics.umami.is"}/script.js";
