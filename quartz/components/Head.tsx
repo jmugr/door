@@ -88,8 +88,10 @@ export default (() => {
         <script>
           {`
             window.umamiBeforeSendHandler = function(type, payload) {
+              console.log("umamiBeforeSendHandler called", type, payload);
               try {
                 if (localStorage.getItem("is_my_device") === "true") {
+                  console.log("Blocking event: is_my_device is true");
                   return false;
                 }
               } catch (_) {
