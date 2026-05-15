@@ -7,11 +7,15 @@ export const sharedPageComponents: SharedLayout = {
   header: [],
   afterBody: [Component.TagList()],
   footer: Component.Footer({
-    links: {
-      GitHub: "https://github.com/jmugr/door",
-      Reddit: "https://www.reddit.com/user/jmugr/",
-      Bluesky: "https://bsky.app/profile/jmugair.bsky.social",
-      X: "https://x.com/jmugair",
+    socialLinks: {
+      label: "Follow via:",
+      items: {
+        "Changelog emails": "mailto:jr.auto.generated.emails@gmail.com?subject=Sign%20Up%20for%20Changelog%20Emails",
+        Bluesky: "https://bsky.app/profile/jmugair.bsky.social",
+        X: "https://x.com/jmugair",
+        Reddit: "https://www.reddit.com/user/jmugr/",
+        GitHub: "https://github.com/jmugr/door",
+      },
     },
   }),
 }
