@@ -84,7 +84,9 @@ export const FrontMatter: QuartzTransformerPlugin<Partial<Options>> = (userOpts)
               engines: frontmatterEngines,
             })
 
-            if (data.title != null && data.title.toString() !== "") {
+            const shouldUseFrontmatterTitle = file.stem === "index"
+
+            if (shouldUseFrontmatterTitle && data.title != null && data.title.toString() !== "") {
               data.title = data.title.toString()
             } else {
               data.title = file.stem ?? i18n(cfg.configuration.locale).propertyDefaults.title
