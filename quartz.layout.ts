@@ -27,6 +27,7 @@ export const defaultContentPageLayout: PageLayout = {
       component: Component.Breadcrumbs(),
       condition: (page) => page.fileData.slug !== "index",
     }),
+    Component.ArticleTitle(),
     Component.ContentMeta(),
   ],
   left: [
