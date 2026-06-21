@@ -172,12 +172,6 @@ a {
       padding-left: 0;
     }
 
-    & li:has(> input[type="checkbox"]:checked) {
-      text-decoration: line-through;
-      text-decoration-color: var(--gray);
-      color: var(--gray);
-    }
-
     & li > * {
       margin-top: 0;
       margin-bottom: 0;
