@@ -1,8 +1,9 @@
 import fs from "fs"
+import { execFile } from "child_process"
 import { Repository } from "@napi-rs/simple-git"
 import { QuartzTransformerPlugin } from "../types"
 import path from "path"
-import { styleText } from "util"
+import { promisify, styleText } from "util"
 
 export interface Options {
   priority: ("frontmatter" | "git" | "filesystem")[]
@@ -35,6 +36,29 @@ function coerceDate(fp: string, d: any): Date {
   }
 
   return invalidDate ? new Date() : dt
+}
+
+// repo-relative posix path -> latest commit time (ms)
+// a single `git log` walk per build replaces one history walk per file
+let gitDates: { buildId: string; dates: Promise<Map<string, number>> } | undefined
+function loadGitDates(buildId: string, workdir: string): Promise<Map<string, number>> {
+  if (gitDates?.buildId !== buildId) {
+    const dates = promisify(execFile)(
+      "git",
+      ["-c", "core.quotepath=off", "log", "--format=%x00%ct", "--name-only", "--no-renames"],
+      { cwd: workdir, maxBuffer: 1 << 30 },
+    ).then(({ stdout }) => {
+      const map = new Map<string, number>()
+      let ts = 0
+      for (const line of stdout.split("\n")) {
+        if (line.startsWith("\0")) ts = Number(line.slice(1)) * 1000
+        else if (line && !map.has(line)) map.set(line, ts)
+      }
+      return map
+    })
+    gitDates = { buildId, dates }
+  }
+  return gitDates.dates
 }
 
 type MaybeDate = undefined | string | number
@@ -78,10 +102,15 @@ export const CreatedModifiedDate: QuartzTransformerPlugin<Partial<Options>> = (u
                 modified ||= file.data.frontmatter.modified as MaybeDate
                 published ||= file.data.frontmatter.published as MaybeDate
               } else if (source === "git" && repo) {
-                try {
-                  const relativePath = path.relative(repositoryWorkdir, fullFp)
-                  modified ||= await repo.getFileLatestModifiedDateAsync(relativePath)
-                } catch {
+                const relativePath = path
+                  .relative(repositoryWorkdir, fullFp)
+                  .split(path.sep)
+                  .join("/")
+                const dates = await loadGitDates(ctx.buildId, repositoryWorkdir)
+                const ts = dates.get(relativePath)
+                if (ts !== undefined) {
+                  modified ||= ts
+                } else {
                   console.log(
                     styleText(
                       "yellow",
