@@ -1,4 +1,4 @@
-from git import Repo
+from git import Repo, Blob
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import frontmatter
@@ -9,6 +9,45 @@ import firebase_admin
 from firebase_admin import credentials, db
 import json
 import os
+import subprocess
+
+NULL_SHA = "0" * 40
+
+def iter_commit_diffs(repo):
+    """Yield (committed_date, [(status, old_path, new_path, new_blob_sha)]) for every commit, newest first.
+
+    Same commits and diffs as iter_commits() + parents[0].diff(commit) with rename detection,
+    but from a single `git log` process instead of one `git diff-tree` per commit.
+    """
+    out = subprocess.run(
+        ["git", "-c", "core.quotepath=off", "log", "--raw", "-M", "--no-abbrev", "-z",
+         "--diff-merges=first-parent", "--format=%x01%H %ct"],
+        cwd=repo.working_tree_dir, capture_output=True, check=True,
+    ).stdout.decode('utf-8', 'surrogateescape')
+    tokens = out.split("\0")
+    i, committed_date, entries = 0, None, None
+    while i < len(tokens):
+        token = tokens[i].lstrip("\n")
+        if token.startswith("\x01"):
+            # Commit header: "\x01<sha> <committed unix time>"
+            if committed_date is not None:
+                yield committed_date, entries
+            committed_date, entries = int(token[1:].split(" ")[1]), []
+            i += 1
+        elif token.startswith(":"):
+            # Raw diff entry: ":<old mode> <new mode> <old sha> <new sha> <status>" then 1 path (2 for renames/copies)
+            meta = token[1:].split(" ")
+            new_sha, status = meta[3], meta[4][0]
+            if status in "RC":
+                entries.append((status, tokens[i + 1], tokens[i + 2], new_sha))
+                i += 3
+            else:
+                entries.append((status, tokens[i + 1], tokens[i + 1], new_sha))
+                i += 2
+        else:
+            i += 1
+    if committed_date is not None:
+        yield committed_date, entries
 
 def has_publish_true(repo, item):
     """Check if a markdown file has 'publish: true' in frontmatter."""
@@ -44,22 +83,15 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
     print(f"Found {len(current_files)} {'published ' if filter_published else ''}files in latest commit")
     
     # Iterate through all commits in reverse chronological order
-    for commit in repo.iter_commits():
+    for committed_date, diff_entries in iter_commit_diffs(repo):
         commit_count += 1
         if commit_count % 100 == 0:
             print(f"Processed {commit_count} commits...")
-        
-        commit_date = datetime.fromtimestamp(commit.committed_date, tz=ZoneInfo("America/Chicago")).date()
-        
+
+        commit_date = datetime.fromtimestamp(committed_date, tz=ZoneInfo("America/Chicago")).date()
+
         try:
-            if commit.parents:
-                diff_index = commit.parents[0].diff(commit)
-            else:
-                diff_index = commit.tree.diff(None)
-            
-            for diff_item in diff_index:
-                new_path = diff_item.b_path
-                old_path = diff_item.a_path
+            for status, old_path, new_path, new_sha in diff_entries:
                 file_path = new_path or old_path
                 if not file_path or not file_path.endswith('.md'):
                     continue
@@ -77,33 +109,30 @@ def generate_changelog(changelog_filename, vault_path, filter_published=True):
                 if file_path == changelog_filename or new_path == changelog_filename or current_path == changelog_filename:
                     continue
 
+                # Deleted in this commit: no blob to check
+                if new_sha == NULL_SHA:
+                    continue
+                blob = Blob(repo, bytes.fromhex(new_sha), path=file_path)
+
                 # Handle rename events
-                if diff_item.renamed:
-                    try:
-                        blob = commit.tree[new_path] if new_path else commit.tree[file_path]
-                        if filter_published:
-                            if has_publish_true(repo, blob):
-                                rename_events_by_day[str(commit_date)].add((old_path, new_path))
-                                rename_mapping[old_path] = new_path
-                        else:
+                if status == "R":
+                    if filter_published:
+                        if has_publish_true(repo, blob):
                             rename_events_by_day[str(commit_date)].add((old_path, new_path))
                             rename_mapping[old_path] = new_path
-                    except KeyError:
-                        pass
+                    else:
+                        rename_events_by_day[str(commit_date)].add((old_path, new_path))
+                        rename_mapping[old_path] = new_path
                     continue
 
                 # Handle regular changes
-                try:
-                    blob = commit.tree[file_path]
-                    if filter_published:
-                        if has_publish_true(repo, blob):
-                            changes_by_day[str(commit_date)].add(file_path)
-                    else:
+                if filter_published:
+                    if has_publish_true(repo, blob):
                         changes_by_day[str(commit_date)].add(file_path)
-                except KeyError:
-                    pass
+                else:
+                    changes_by_day[str(commit_date)].add(file_path)
         except Exception as e:
-            print(f"Warning: Error processing commit {commit.hexsha[:7]}: {e}")
+            print(f"Warning: Error processing commit #{commit_count}: {e}")
             continue
     
     print(f"Total commits processed: {commit_count}")
