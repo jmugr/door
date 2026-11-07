@@ -46,6 +46,12 @@ jobs:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
         run: |
           python scripts/create-changelog.py --vault-path=vault
+      - name: Generate vault stats
+        # Writes Garage stats.md and public-vault-stats.json into the build's copy of the
+        # vault (never committed). If its self-checks fail, deploy without the page.
+        continue-on-error: true
+        run: |
+          python scripts/vault-stats.py --vault-path=vault
       - uses: actions/setup-node@v4
         with:
           node-version: 22
