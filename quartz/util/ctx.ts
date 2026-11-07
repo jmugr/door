@@ -29,6 +29,8 @@ export interface BuildCtx {
   allSlugs: FullSlug[]
   allFiles: FilePath[]
   transcludeOnly?: ProcessedContent[]
+  /** Embed-only files that a published page embeds, so they are emitted */
+  embeddedFiles?: FilePath[]
   trie?: FileTrieNode<BuildTimeTrieData>
   incremental: boolean
 }

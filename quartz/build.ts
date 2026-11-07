@@ -24,6 +24,11 @@ import { minimatch } from "minimatch"
 import { readFrontmatter } from "./plugins/transformers/frontmatter"
 import { visit } from "unist-util-visit"
 import { Element, Root } from "hast"
+import { EmbedIndex, collectEmbeddedFiles } from "./util/embeds"
+
+function isPublished(data: Record<string, unknown> | null): boolean {
+  return data !== null && (data.publish === true || data.publish === "true")
+}
 
 function isEligibleForParse(data: Record<string, unknown> | null, verbose: boolean, fp: string): boolean {
   if (data === null) {
@@ -104,7 +109,18 @@ async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
   console.log(`Cleaned output directory \`${output}\` in ${perf.timeSince("clean")}`)
 
   perf.addEvent("glob")
-  const allFiles = await glob("**/*.*", argv.directory, cfg.configuration.ignorePatterns)
+  const { ignorePatterns } = cfg.configuration
+  const embedOnlyPatterns = cfg.configuration.embedOnlyPatterns ?? []
+  const visibleFiles = await glob("**/*.*", argv.directory, ignorePatterns)
+  // Embed-only files stay out of allFiles until a published page embeds them
+  const shownOtherFiles = new Set(
+    await glob("**/*.*", argv.directory, ["**/*.md", ...ignorePatterns, ...embedOnlyPatterns]),
+  )
+  const embedOnlyFiles = visibleFiles.filter(
+    (fp) => !fp.endsWith(".md") && !shownOtherFiles.has(fp),
+  )
+  const embedOnlySet = new Set(embedOnlyFiles)
+  const allFiles = visibleFiles.filter((fp) => !embedOnlySet.has(fp))
   const markdownPaths = allFiles.filter((fp) => fp.endsWith(".md")).sort()
   console.log(
     `Found ${markdownPaths.length} input files from \`${argv.directory}\` in ${perf.timeSince("glob")}`,
@@ -115,16 +131,28 @@ async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
   ctx.allSlugs = allFiles.map((fp) => slugifyFilePath(fp as FilePath))
 
   perf.addEvent("prefilter")
-  const eligibilityResults = await Promise.all(
-    filePaths.map(async (fp) => {
-      const data = await readFrontmatter(fp)
-      return isEligibleForParse(data, argv.verbose ?? false, fp)
-    }),
+  const frontmatters = await Promise.all(filePaths.map((fp) => readFrontmatter(fp)))
+  const pathsToParse = filePaths.filter((fp, i) =>
+    isEligibleForParse(frontmatters[i], argv.verbose ?? false, fp),
   )
-  const pathsToParse = filePaths.filter((_, i) => eligibilityResults[i])
   console.log(
     `Pre-parse filter: ${pathsToParse.length}/${filePaths.length} markdown files eligible in ${perf.timeSince("prefilter")}`,
   )
+
+  // Register embed-only files that published notes embed, before parsing, so links resolve
+  const embedIndex = new EmbedIndex(embedOnlyFiles)
+  const embeddedFiles = new Set<FilePath>()
+  const registerEmbeds = (found: Set<FilePath>) => {
+    for (const fp of found) {
+      if (embeddedFiles.has(fp)) continue
+      embeddedFiles.add(fp)
+      ctx.allFiles.push(fp)
+      ctx.allSlugs.push(slugifyFilePath(fp))
+    }
+    ctx.embeddedFiles = [...embeddedFiles]
+  }
+  const publishedPaths = filePaths.filter((_, i) => isPublished(frontmatters[i]))
+  registerEmbeds(await collectEmbeddedFiles(publishedPaths, embedIndex))
 
   const parsedFiles = await parseMarkdown(ctx, pathsToParse)
   const filteredContent = filterContent(ctx, parsedFiles)
@@ -154,9 +182,13 @@ async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
     parsedBySlug.add(target)
   }
 
+  registerEmbeds(await collectEmbeddedFiles(transcludeOnlyPaths, embedIndex))
   ctx.transcludeOnly = await parseMarkdown(ctx, transcludeOnlyPaths)
   console.log(
     `Transclusion dependency parse: ${ctx.transcludeOnly.length} file(s) in ${perf.timeSince("transclude-prefetch")}`,
+  )
+  console.log(
+    `Embedded files published: ${embeddedFiles.size} of ${embedOnlyFiles.length} embed-only files`,
   )
 
   await emitContent(ctx, filteredContent)

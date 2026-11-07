@@ -24,10 +24,11 @@ const config: QuartzConfig = {
       "templates", 
       ".obsidian",
       "**/*.patch",
-      "**/*.pdf",
       "**/*.canvas",
-      "Attachments/!(public-|Public-)*.*",
     ],
+    // Every other non-markdown file (images, PDFs, .txt, .base, .json) is only published
+    // when a published page embeds it, or when its name starts with "public-"
+    embedOnlyPatterns: ["**/!(public-*|Public-*).*"],
     defaultDateType: "modified",
     theme: {
       fontOrigin: "googleFonts",

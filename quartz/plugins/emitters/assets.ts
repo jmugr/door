@@ -8,7 +8,11 @@ import { QuartzConfig } from "../../cfg"
 
 const filesToCopy = async (argv: Argv, cfg: QuartzConfig) => {
   // glob all non MD files in content folder and copy it over
-  return await glob("**", argv.directory, ["**/*.md", ...cfg.configuration.ignorePatterns])
+  return await glob("**", argv.directory, [
+    "**/*.md",
+    ...cfg.configuration.ignorePatterns,
+    ...(cfg.configuration.embedOnlyPatterns ?? []),
+  ])
 }
 
 const copyFile = async (argv: Argv, fp: FilePath) => {
@@ -28,8 +32,9 @@ const copyFile = async (argv: Argv, fp: FilePath) => {
 export const Assets: QuartzEmitterPlugin = () => {
   return {
     name: "Assets",
-    async *emit({ argv, cfg }) {
-      const fps = await filesToCopy(argv, cfg)
+    async *emit({ argv, cfg, embeddedFiles }) {
+      const fps = new Set(await filesToCopy(argv, cfg))
+      for (const fp of embeddedFiles ?? []) fps.add(fp)
       for (const fp of fps) {
         yield copyFile(argv, fp)
       }

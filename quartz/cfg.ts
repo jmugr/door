@@ -67,6 +67,11 @@ export interface GlobalConfiguration {
   analytics: Analytics
   /** Glob patterns to not search */
   ignorePatterns: string[]
+  /**
+   * Glob patterns for non-markdown files that are only published when a published page
+   * (or a note it transcludes) embeds them, e.g. `![[image.png]]`
+   */
+  embedOnlyPatterns?: string[]
   /** Whether to use created, modified, or published as the default type of date */
   defaultDateType: ValidDateType
   /** Base URL to use for CNAME files, sitemaps, and RSS feeds that require an absolute URL.
